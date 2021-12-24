@@ -1,43 +1,64 @@
-from pytube import YouTube, Playlist
-import os
 from ytmusicapi import YTMusic
+import youtube_dl
+import multiprocessing
+
 
 def authenticate():
-    #copy entire 'POST' headers from firefox by browsing '/browse' in network lists and follow commands from pop up terminals
+    # copy entire 'POST' headers from firefox by browsing '/browse' in network lists and follow commands from pop up terminals
     YTMusic.setup(filepath="headers_auth.json")
 
 
-def convert(urlList):
-    counter = 1
-    for url in urlList:
-        yt = YouTube(url)
-        yt.streams.filter()
-        video = yt.streams.filter(only_audio=True).first()
-        out_file = video.download(output_path="desired output path...")
-        base, ext = os.path.splitext(out_file)
-        new_file = base + '.mp3'
-        os.rename(out_file, new_file)
-        print(f'dowonloaded...{counter}/{len(urlList)}')
-        counter+=1
+def multiThread():
+    songList = getPlaylist()
+    songs = []
+    for song in songList:
+        songs.append(song)
+    pool = multiprocessing.Pool()
+    outputs = pool.map(convert, songs)
+    print(outputs)
+
+
+def convert(song):
+    songList = getPlaylist()
+    url = songList[song]
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': f'/Users/jay/Desktop/mus/songs/{song}.',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+    }
+    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+    print(f'finished downloading : {song}.mp3')
+
 
 def getPlaylist():
     print("setting up...")
     ytmusic = YTMusic('headers_auth.json')
     trackList = ytmusic.get_liked_songs(limit=5000).get('tracks')
-    urlList = []
+    songList = {}
     for track in trackList:
         urlLink = 'https://www.youtube.com/watch?v='
         videoId = str(track.get('videoId'))
         urlLink += videoId
-        urlList.append(urlLink)
+        title = str(track.get('title'))
+        songList[title] = urlLink
     print("download starting...")
-    return urlList
+    return songList
 
-def downloadAllSongs():
-    urlList = getPlaylist()
-    convert(urlList)
-    print("download finished")
+
+def saveCurrentplaylist():
+    songList = getPlaylist()
+    textfile = open("songList.txt", "w")
+    for element in songList:
+        textfile.write(element + "\n")
+    textfile.close()
+
 
 if __name__ == '__main__':
-    downloadAllSongs()
-
+    saveCurrentplaylist()
+    multiThread()
